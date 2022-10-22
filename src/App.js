@@ -1,208 +1,171 @@
+import React from "react";
+import { Route, Routes } from "react-router-dom";
+import axios from "axios";
+import Header from "./components/Header";
+import Drawer from "./components/Drawer";
+import AppContext from "./context";
+import Home from "./pages/Home";
+import Favorites from "./pages/Favorites";
+import Orders from "./pages/Orders";
+
 function App() {
+  const [items, setItems] = React.useState([]);
+  const [cartItems, setCartItems] = React.useState([]);
+  const [favorites, setFavorites] = React.useState([]);
+  const [searchValue, setSearchValue] = React.useState("");
+  const [cartOpened, setCartOpened] = React.useState(false);
+  const [isLoading, setIsLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    async function fetchData() {
+      try {
+        setIsLoading(true);
+        const cartResponse = await axios.get(
+          "https://62e978e83a5f1572e86b46ac.mockapi.io/cart"
+        );
+        const favoritesResponse = await axios.get(
+          "https://62e978e83a5f1572e86b46ac.mockapi.io/favorites"
+        );
+        const itemsResponse = await axios.get(
+          "https://62e978e83a5f1572e86b46ac.mockapi.io/items"
+        );
+
+        setIsLoading(false);
+        setCartItems(cartResponse.data);
+        setFavorites(favoritesResponse.data);
+        setItems(itemsResponse.data);
+      } catch (error) {
+        alert("Error with request dates");
+      }
+    }
+    fetchData();
+  }, []);
+
+  const onAddToCart = async (obj) => {
+    try {
+      const findItem = cartItems.find(
+        (item) => Number(item.parentId) === Number(obj.id)
+      );
+      if (findItem) {
+        setCartItems((prev) =>
+          prev.filter((item) => Number(item.parentId) !== Number(obj.id))
+        );
+        await axios.delete(
+          `https://62e978e83a5f1572e86b46ac.mockapi.io/cart/${findItem.id}`
+        );
+      } else {
+        setCartItems((prev) => [...prev, obj]);
+        const { data } = await axios.post(
+          "https://62e978e83a5f1572e86b46ac.mockapi.io/cart",
+          obj
+        );
+        setCartItems((prev) =>
+          prev.map((item) => {
+            if (item.parentId === data.parentId) {
+              return {
+                ...item,
+                id: data.id,
+              };
+            }
+            return item;
+          })
+        );
+      }
+    } catch (error) {
+      alert("Error with added items in drawer");
+    }
+  };
+
+  const onRemoveItem = async (id) => {
+    try {
+      setCartItems((prev) =>
+        prev.filter((item) => Number(item.id) !== Number(id))
+      );
+      await axios.delete(
+        `https://62e978e83a5f1572e86b46ac.mockapi.io/cart/${id}`
+      );
+    } catch (error) {
+      alert("Error");
+    }
+  };
+
+  const onAddToFavorite = async (obj) => {
+    try {
+      if (favorites.find((favObj) => Number(favObj.id) === Number(obj.id))) {
+        axios.delete(
+          `https://62e978e83a5f1572e86b46ac.mockapi.io/favorites/${obj.id}`
+        );
+        setFavorites((prev) =>
+          prev.filter((item) => Number(item.id) !== Number(obj.id))
+        );
+      } else {
+        const { data } = await axios.post(
+          "https://62e978e83a5f1572e86b46ac.mockapi.io/favorites",
+          obj
+        );
+        setFavorites((prev) => [...prev, data]);
+      }
+    } catch (error) {
+      alert("Не вдалось добавити в вибрані");
+    }
+  };
+
+  const onChangeSerchInput = (event) => {
+    setSearchValue(event.target.value);
+  };
+
+  const isItemAdded = (id) => {
+    cartItems.some((obj) => Number(obj.parentId) === Number(id));
+  };
+
   return (
-    <div className="wrapper clear">
-      <div className="overlay">
-        <div className="drawer">
-          <h2 className="d-flex justify-between mb-30">
-            Корзина
-            <img
-              className="removeBtn cu-p"
-              src="/img/btn-remove.svg"
-              alt="Remove"
-            ></img>
-          </h2>
-          <div className="items">
-            <div className="cartItem d-flex align-center mb-20">
-              <div
-                style={{ backgroundImage: "url(/img/sneakers/1.jpg)" }}
-                className="cartItemImg"
-              ></div>
-              <div className="mr-20 flex">
-                <p className="mb-5">Чоловічі кросівки Nike Jordan</p>
-                <b>12 999 грн.</b>
-              </div>
-              <img
-                className="removeBtn"
-                src="/img/btn-remove.svg"
-                alt="Remove"
-              ></img>
-            </div>
-          </div>
-          <div className="cartTotalBlock">
-            <ul>
-              <li>
-                <span>Разом:</span>
-                <div></div>
-                <b>22 000 грн. </b>
-              </li>
-              <li>
-                <span>Податок 5%:</span>
-                <div></div>
-                <b>2 200 грн. </b>
-              </li>
-            </ul>
-            <button className="greenButton">
-              Оформити замовлення<img src="/img/arrow.svg" alt="Arrow"></img>
-            </button>
-          </div>
-        </div>
+    <AppContext.Provider
+      value={{
+        items,
+        cartItems,
+        favorites,
+        isItemAdded,
+        setCartOpened,
+        setCartItems,
+        onAddToCart,
+        onAddToFavorite,
+      }}
+    >
+      <div className="wrapper clear">
+        <Drawer
+          items={cartItems}
+          onClose={() => setCartOpened(false)}
+          onRemove={onRemoveItem}
+          opened={cartOpened}
+        ></Drawer>
+
+        <Header onClickCart={() => setCartOpened(true)}></Header>
+        <Routes>
+          <Route
+            path="/"
+            exact
+            element={
+              <Home
+                items={items}
+                cartitems={cartItems}
+                searchValue={searchValue}
+                setSearchValue={setSearchValue}
+                onChangeSerchInput={onChangeSerchInput}
+                onAddToFavorite={onAddToFavorite}
+                onAddToCart={onAddToCart}
+                isLoading={isLoading}
+              ></Home>
+            }
+          ></Route>
+          <Route
+            path="/favorites"
+            exact
+            element={<Favorites onAddToFavorite={onAddToFavorite}></Favorites>}
+          ></Route>
+          <Route path="/orders" exact element={<Orders></Orders>}></Route>
+        </Routes>
       </div>
-      <header className="d-flex justify-between align-center p-40">
-        <div className="d-flex align-center">
-          <img width={40} height={40} alt="" src="/img/logo.png" />
-          <div>
-            <h3 className="text-uppercase">React Sneakers</h3>
-            <p className="opacity-5">Магазин найкращих кросівок</p>
-          </div>
-        </div>
-        <ul className="d-flex">
-          <li className="mr-30">
-            <img width={18} height={18} src="/img/cart.svg" />
-            <span>850 грн.</span>
-          </li>
-          <li>
-            <img width={18} height={18} src="/img/user.svg" />
-          </li>
-        </ul>
-      </header>
-      <div className="content p-40">
-        <div className="d-flex align-center justify-between mb-40">
-          <h1>Всі кросівки</h1>
-          <div className="search-block d-flex">
-            <img src="/img/search.svg" alt="Search"></img>
-            <input placeholder="Пошук..."></input>
-          </div>
-        </div>
-
-        <div className="d-flex">
-          <div className="card">
-            <div className="favorite">
-              <img src="/img/unliked.svg" alt="Unliked"></img>
-            </div>
-            <img
-              width={133}
-              height={112}
-              src="/img/sneakers/1.jpg"
-              alt="Sneakers"
-            ></img>
-            <h5>Чоловічі кросівки Nike Jordan</h5>
-            <div className="d-flex justify-between align-center">
-              <div className="d-flex flex-column">
-                <span>Ціна:</span>
-                <b>12 999</b>
-              </div>
-              <button className="button">
-                <svg
-                  width="12"
-                  height="12"
-                  viewBox="0 0 12 12"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path
-                    d="M10.6653 5.13128H7.20219V1.66827C7.20219 0.332907 5.13118 0.332907 5.13118 1.66827V5.13128H1.66805C0.332981 5.13128 0.332981 7.20221 1.66805 7.20221H5.13118V10.6652C5.13118 12.0006 7.20219 12.0006 7.20219 10.6652V7.20221H10.6653C12.0006 7.20221 12.0006 5.13128 10.6653 5.13128Z"
-                    fill="#D3D3D3"
-                  />
-                </svg>
-                {/* <img width={11} height={11} src="/img/plus.svg" alt="Plus"></img> */}
-              </button>
-            </div>
-          </div>
-
-          <div className="card">
-            <img
-              width={133}
-              height={112}
-              src="/img/sneakers/2.jpeg"
-              alt="Sneakers"
-            ></img>
-            <h5>Чоловічі кросівки Nike Jordan</h5>
-            <div className="d-flex justify-between align-center">
-              <div className="d-flex flex-column">
-                <span>Ціна:</span>
-                <b>12 999</b>
-              </div>
-              <button className="button">
-                <svg
-                  width="12"
-                  height="12"
-                  viewBox="0 0 12 12"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path
-                    d="M10.6653 5.13128H7.20219V1.66827C7.20219 0.332907 5.13118 0.332907 5.13118 1.66827V5.13128H1.66805C0.332981 5.13128 0.332981 7.20221 1.66805 7.20221H5.13118V10.6652C5.13118 12.0006 7.20219 12.0006 7.20219 10.6652V7.20221H10.6653C12.0006 7.20221 12.0006 5.13128 10.6653 5.13128Z"
-                    fill="#D3D3D3"
-                  />
-                </svg>
-                {/* <img width={11} height={11} src="/img/plus.svg" alt="Plus"></img> */}
-              </button>
-            </div>
-          </div>
-
-          <div className="card">
-            <img
-              width={133}
-              height={112}
-              src="/img/sneakers/3.jpeg"
-              alt="Sneakers"
-            ></img>
-            <h5>Чоловічі кросівки Nike Jordan</h5>
-            <div className="d-flex justify-between align-center">
-              <div className="d-flex flex-column">
-                <span>Ціна:</span>
-                <b>12 999</b>
-              </div>
-              <button className="button">
-                <svg
-                  width="12"
-                  height="12"
-                  viewBox="0 0 12 12"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path
-                    d="M10.6653 5.13128H7.20219V1.66827C7.20219 0.332907 5.13118 0.332907 5.13118 1.66827V5.13128H1.66805C0.332981 5.13128 0.332981 7.20221 1.66805 7.20221H5.13118V10.6652C5.13118 12.0006 7.20219 12.0006 7.20219 10.6652V7.20221H10.6653C12.0006 7.20221 12.0006 5.13128 10.6653 5.13128Z"
-                    fill="#D3D3D3"
-                  />
-                </svg>
-                {/* <img width={11} height={11} src="/img/plus.svg" alt="Plus"></img> */}
-              </button>
-            </div>
-          </div>
-          <div className="card">
-            <img
-              width={133}
-              height={112}
-              src="/img/sneakers/4.jpeg"
-              alt="Sneakers"
-            ></img>
-            <h5>Чоловічі кросівки Nike Jordan</h5>
-            <div className="d-flex justify-between align-center">
-              <div className="d-flex flex-column">
-                <span>Ціна:</span>
-                <b>12 999</b>
-              </div>
-              <button className="button">
-                <svg
-                  width="12"
-                  height="12"
-                  viewBox="0 0 12 12"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path
-                    d="M10.6653 5.13128H7.20219V1.66827C7.20219 0.332907 5.13118 0.332907 5.13118 1.66827V5.13128H1.66805C0.332981 5.13128 0.332981 7.20221 1.66805 7.20221H5.13118V10.6652C5.13118 12.0006 7.20219 12.0006 7.20219 10.6652V7.20221H10.6653C12.0006 7.20221 12.0006 5.13128 10.6653 5.13128Z"
-                    fill="#D3D3D3"
-                  />
-                </svg>
-                {/* <img width={11} height={11} src="/img/plus.svg" alt="Plus"></img> */}
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+    </AppContext.Provider>
   );
 }
 
